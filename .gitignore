@@ -1,0 +1,19 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyTorch / YOLO model weights (downloaded automatically on server boot)
+yolov8n.pt
+
+# User uploads and screenshots
+uploads/
+screenshots/
+
+# Output videos
+output_fire_ai.mp4
+output_*.mp4
+
+# OS generated files
+.DS_Store
+Thumbs.db
