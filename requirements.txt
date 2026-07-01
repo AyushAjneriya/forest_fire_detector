@@ -1,0 +1,7 @@
+# Core Dependencies for Forest Fire Detection Web App
+flask
+ultralytics
+scipy
+numpy
+torchvision
+opencv-python-headless
