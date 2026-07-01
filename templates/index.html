@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forest Fire Early Detection Dashboard</title>
+    <!-- Modern Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Leaflet GIS Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <style>
+        :root {
+            --bg-color: #08080a;
+            --panel-bg: rgba(22, 22, 29, 0.65);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --accent-primary: #ff5533;
+            --accent-glow: rgba(255, 85, 51, 0.15);
+            --text-main: #f3f3f6;
+            --text-muted: #8d9099;
+            --text-cyan: #33e0ff;
+            --text-green: #33ff77;
+            --text-orange: #ff9933;
+            
+            /* Status colors */
+            --clear: #33e0ff;
+            --low: #33ff77;
+            --moderate: #ffdd33;
+            --high: #ff9933;
+            --critical: #ff3333;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(255, 85, 51, 0.05) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(51, 224, 255, 0.04) 0px, transparent 50%);
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 40px;
+            background: rgba(10, 10, 14, 0.8);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 14px;
+            height: 14px;
+            background-color: var(--accent-primary);
+            border-radius: 50%;
+            box-shadow: 0 0 15px var(--accent-primary);
+            animation: pulse-glow 2s infinite ease-in-out;
+        }
+
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            background: linear-gradient(135deg, #fff 0%, #ff8877 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .system-status-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(51, 255, 119, 0.1);
+            border: 1px solid rgba(51, 255, 119, 0.2);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-green);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--text-green);
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 8px var(--text-green);
+        }
+
+        .main-container {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 24px;
+            padding: 30px 40px;
+            flex-grow: 1;
+            max-width: 1800px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        @media (max-width: 1100px) {
+            .main-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Glassmorphic Panels */
+        .glass-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            aspect-ratio: 16/9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .video-feed {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .overlay-banner {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 1rem;
+            letter-spacing: 1px;
+            z-index: 10;
+            display: none;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            animation: flash-border 1.5s infinite alternate;
+        }
+
+        /* Grid of core metrics */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 16px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(255, 255, 255, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        /* Configurations Sidebar */
+        .section-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #fff;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .config-group {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .toggle-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .toggle-label {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .toggle-title {
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .toggle-desc {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Custom Switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255,255,255,0.1);
+            transition: .3s;
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: #fff;
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--accent-primary);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+
+        /* Slider Control */
+        .range-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .range-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+        }
+
+        .range-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            outline: none;
+            margin: 6px 0;
+        }
+
+        .range-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent-primary);
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--accent-primary);
+            transition: all 0.2s;
+        }
+
+        .range-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        /* Source Controller / File Upload */
+        .source-panel {
+            background: rgba(255, 255, 255, 0.01);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .btn-tabs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 8px;
+            padding: 4px;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 8px;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 0.85rem;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            background: var(--accent-primary);
+            color: #fff;
+            box-shadow: 0 2px 10px rgba(255, 85, 51, 0.4);
+        }
+
+        .upload-area {
+            border: 2px dashed rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s;
+        }
+
+        .upload-area:hover {
+            border-color: var(--accent-primary);
+            background: rgba(255, 85, 51, 0.03);
+        }
+
+        .upload-icon {
+            font-size: 2rem;
+            margin-bottom: 8px;
+            display: inline-block;
+        }
+
+        .upload-text {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .file-input {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        /* Sparkline canvas */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 100px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            overflow: hidden;
+        }
+
+        .sparkline-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Console Output Log */
+        .console-panel {
+            background: #050507;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            height: 180px;
+        }
+
+        .console-header {
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .console-output {
+            flex-grow: 1;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: #ccc;
+            line-height: 1.5;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding-right: 4px;
+        }
+
+        /* Custom Scrollbar for console */
+        .console-output::-webkit-scrollbar {
+            width: 4px;
+        }
+        .console-output::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .console-output::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+        }
+
+        .log-entry {
+            border-bottom: 1px solid rgba(255,255,255,0.02);
+            padding-bottom: 2px;
+        }
+
+        .screenshot-btn {
+            background: transparent;
+            border: 1px solid rgba(51, 224, 255, 0.25);
+            border-radius: 8px;
+            padding: 10px;
+            color: #33e0ff;
+            font-family: inherit;
+            font-size: 0.85rem;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .screenshot-btn:hover {
+            background: rgba(51, 224, 255, 0.08);
+            border-color: rgba(51, 224, 255, 0.5);
+            box-shadow: 0 0 10px rgba(51, 224, 255, 0.15);
+        }
+
+        /* Animations */
+        @keyframes pulse-glow {
+            0% { transform: scale(0.9); opacity: 0.6; box-shadow: 0 0 10px rgba(255, 85, 51, 0.4); }
+            50% { transform: scale(1.1); opacity: 1; box-shadow: 0 0 20px rgba(255, 85, 51, 0.8); }
+            100% { transform: scale(0.9); opacity: 0.6; box-shadow: 0 0 10px rgba(255, 85, 51, 0.4); }
+        }
+
+        @keyframes flash-border {
+            from { border-color: rgba(255, 51, 51, 0.4); }
+            to { border-color: rgba(255, 51, 51, 1); }
+        }
+
+        .critical-alert {
+            background: rgba(255, 51, 51, 0.15);
+            border: 1px solid var(--critical);
+            color: var(--text-main);
+            text-shadow: 0 0 5px rgba(255,51,51,0.5);
+            box-shadow: 0 0 20px rgba(255, 51, 51, 0.2);
+        }
+
+        .high-alert {
+            background: rgba(255, 153, 51, 0.15);
+            border: 1px solid var(--high);
+            color: var(--text-main);
+            text-shadow: 0 0 5px rgba(255,153,51,0.5);
+            box-shadow: 0 0 20px rgba(255, 153, 51, 0.2);
+        }
+
+        .risk-pill {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 0.75rem;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .risk-clear { background: rgba(51, 224, 255, 0.1); color: var(--clear); border: 1px solid rgba(51, 224, 255, 0.2); }
+        .risk-low { background: rgba(51, 255, 119, 0.1); color: var(--low); border: 1px solid rgba(51, 255, 119, 0.2); }
+        .risk-moderate { background: rgba(255, 221, 51, 0.1); color: var(--moderate); border: 1px solid rgba(255, 221, 51, 0.2); }
+        .risk-high { background: rgba(255, 153, 51, 0.1); color: var(--high); border: 1px solid rgba(255, 153, 51, 0.2); }
+        .risk-critical { background: rgba(255, 51, 51, 0.1); color: var(--critical); border: 1px solid rgba(255, 51, 51, 0.2); }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-section">
+            <div class="logo-icon"></div>
+            <h1>FOREST FIRE AI MONITOR</h1>
+        </div>
+        <div class="system-status-pill">
+            <span class="status-dot"></span>
+            DETECTION ENGINE ACTIVE
+        </div>
+    </header>
+
+    <div class="main-container">
+        <!-- Left Side: Live Feed & Primary Metrics -->
+        <div class="glass-panel" style="flex-grow: 1;">
+            <div class="video-container">
+                <div class="overlay-banner" id="banner">
+                    CRITICAL FIRE DETECTED
+                </div>
+                <img src="/video_feed" alt="Video Stream" class="video-feed">
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Fire Risk Level</div>
+                    <div class="stat-value"><span id="risk-level" class="risk-pill risk-clear">CLEAR</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Fire Core Pixels</div>
+                    <div class="stat-value" id="fire-px">0 px²</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Smoke Core Pixels</div>
+                    <div class="stat-value" id="smoke-px">0 px²</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Active Fire Zones</div>
+                    <div class="stat-value" id="n-zones">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">AI Max Confidence</div>
+                    <div class="stat-value" style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                        <span id="max-conf">0%</span>
+                        <div style="flex-grow: 1; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; max-width: 60px;">
+                            <div id="max-conf-bar" style="width: 0%; height: 100%; background: var(--accent-primary); transition: width 0.2s ease;"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Processing Speed</div>
+                    <div class="stat-value" id="fps">0.0 FPS</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Side: Configs & Logs -->
+        <div class="glass-panel">
+            <div class="section-title">Input Source Controller</div>
+            
+            <div class="source-panel">
+                <div class="btn-tabs">
+                    <button class="tab-btn active" id="btn-webcam" onclick="setSource('webcam')">Live Webcam</button>
+                    <button class="tab-btn" id="btn-uploaded" onclick="setSource('uploaded')">Uploaded Video</button>
+                </div>
+                
+                <div class="upload-area" id="upload-box" style="display: none;">
+                    <div class="upload-icon">📁</div>
+                    <div class="upload-text">Drag & drop video, or click to browse</div>
+                    <input type="file" id="file-uploader" class="file-input" accept="video/*" onchange="uploadVideo(this)">
+                </div>
+                
+                <button class="screenshot-btn" onclick="takeScreenshot()">
+                    📸 Take System Snapshot
+                </button>
+            </div>
+
+            <div class="section-title">Model Config & Layers</div>
+
+            <div class="config-group">
+                <!-- Toggles -->
+                <div class="toggle-row">
+                    <div class="toggle-label">
+                        <span class="toggle-title">Thermal Overlay</span>
+                        <span class="toggle-desc">Layer thermal gradient from RGB channel</span>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="toggle-thermal" checked onchange="updateConfig()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="toggle-row">
+                    <div class="toggle-label">
+                        <span class="toggle-title">Heatmap Accumulator</span>
+                        <span class="toggle-desc">Display fire hotspots with temporal memory</span>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="toggle-heatmap" checked onchange="updateConfig()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="toggle-row">
+                    <div class="toggle-label">
+                        <span class="toggle-title">YOLOv8 Objects</span>
+                        <span class="toggle-desc">Identify context objects (person, vehicle)</span>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="toggle-yolo" checked onchange="updateConfig()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="toggle-row">
+                    <div class="toggle-label">
+                        <span class="toggle-title">Vignette Blur</span>
+                        <span class="toggle-desc">Add dark radial vignetting edges</span>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="toggle-vignette" checked onchange="updateConfig()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="toggle-row">
+                    <div class="toggle-label">
+                        <span class="toggle-title">HUD Overlay</span>
+                        <span class="toggle-desc">Show top/bottom informational overlays</span>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="toggle-hud" checked onchange="updateConfig()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <!-- Sliders -->
+                <div class="range-group">
+                    <div class="range-header">
+                        <span>Thermal Alpha (Opacity)</span>
+                        <span id="val-thermal-alpha">0.20</span>
+                    </div>
+                    <input type="range" id="slider-thermal-alpha" class="range-slider" min="0.05" max="0.80" step="0.05" value="0.20" oninput="updateConfig()">
+                </div>
+
+                <div class="range-group">
+                    <div class="range-header">
+                        <span>YOLO confidence threshold</span>
+                        <span id="val-yolo-conf">0.30</span>
+                    </div>
+                    <input type="range" id="slider-yolo-conf" class="range-slider" min="0.10" max="0.90" step="0.05" value="0.30" oninput="updateConfig()">
+                </div>
+
+                <div class="range-group">
+                    <div class="range-header">
+                        <span>Fire Alert threshold (pixels)</span>
+                        <span id="val-fire-thresh">800 px</span>
+                    </div>
+                    <input type="range" id="slider-fire-thresh" class="range-slider" min="100" max="5000" step="100" value="800" oninput="updateConfig()">
+                </div>
+            </div>
+
+            <div class="section-title">Risk Trend (Real-time)</div>
+            <div class="chart-container">
+                <canvas id="sparkline" class="sparkline-canvas"></canvas>
+            </div>
+
+            <div class="section-title">Geospatial Camera Tracking</div>
+            <div class="source-panel" style="padding: 0; overflow: hidden; height: 160px; border-radius: 12px; border: 1px solid var(--border-color); position: relative; z-index: 10;">
+                <div id="map" style="width: 100%; height: 100%;"></div>
+            </div>
+
+            <div class="console-panel" style="height: 140px; border-color: rgba(255, 85, 51, 0.2);">
+                <div class="console-header" style="color: var(--accent-primary); display: flex; align-items: center; gap: 6px;">
+                    ⚠️ Active Threat Alerts
+                </div>
+                <div class="console-output" id="alerts-log" style="color: #ffbba8;">
+                    <div class="log-entry" style="color: var(--text-muted);">No active threats logged.</div>
+                </div>
+            </div>
+
+            <div class="console-panel" style="height: 140px;">
+                <div class="console-header">Detection Log Feed</div>
+                <div class="console-output" id="logs">
+                    <div class="log-entry">[00:00:00] Dashboard initialised. Connecting to CV stream...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentSource = 'webcam';
+        let riskHistory = [];
+        const maxHistoryLen = 120;
+        
+        // Canvas sparkline setup
+        const canvas = document.getElementById('sparkline');
+        const ctx = canvas.getContext('2d');
+        
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function drawSparkline() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (riskHistory.length < 2) return;
+            
+            const w = canvas.width;
+            const h = canvas.height;
+            const step = w / (maxHistoryLen - 1);
+            
+            ctx.beginPath();
+            ctx.strokeStyle = '#ff5533';
+            ctx.lineWidth = 2.5;
+            
+            // Subtle glow
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#ff5533';
+            
+            const maxVal = 100.0;
+            
+            for (let i = 0; i < riskHistory.length; i++) {
+                const x = i * step;
+                const val = riskHistory[i];
+                const y = h - 10 - ((val / maxVal) * (h - 20));
+                
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+            ctx.shadowBlur = 0; // reset
+        }
+
+        // Initialize Geospatial Leaflet Map
+        const map = L.map('map', {
+            zoomControl: false,
+            attributionControl: false
+        }).setView([37.1661, -119.3115], 11);
+
+        // Dark-themed tile layer matching the dashboard aesthetics
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            maxZoom: 20
+        }).addTo(map);
+
+        // Add camera marker
+        const cameraIcon = L.divIcon({
+            className: 'custom-div-icon',
+            html: `<div style="background-color: #33e0ff; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 10px #33e0ff;"></div>`,
+            iconSize: [12, 12]
+        });
+        const cameraMarker = L.marker([37.1661, -119.3115], { icon: cameraIcon }).addTo(map)
+            .bindPopup("<b>Station Alpha-01</b><br>Sierra Forest North")
+            .openPopup();
+
+        let fireCircle = null;
+
+        // Browser Camera streaming variables
+        let localStream = null;
+        let cameraInterval = null;
+        const hiddenVideo = document.createElement('video');
+        hiddenVideo.autoplay = true;
+        hiddenVideo.playsInline = true;
+        const hiddenCanvas = document.createElement('canvas');
+
+        function startBrowserCamera() {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                // Request camera stream (800x450 matches MAX_W=800 landscape ratio)
+                navigator.mediaDevices.getUserMedia({ video: { width: 800, height: 450 } })
+                .then(stream => {
+                    localStream = stream;
+                    hiddenVideo.srcObject = stream;
+                    
+                    const logsDiv = document.getElementById('logs');
+                    logsDiv.innerHTML += `<div class="log-entry" style="color: var(--text-cyan);">[${new Date().toLocaleTimeString()}] Browser camera stream active. Streaming frames...</div>`;
+                    logsDiv.scrollTop = logsDiv.scrollHeight;
+                    
+                    const feedImg = document.querySelector('.video-feed');
+                    
+                    cameraInterval = setInterval(() => {
+                        if (hiddenVideo.readyState === hiddenVideo.HAVE_ENOUGH_DATA) {
+                            hiddenCanvas.width = hiddenVideo.videoWidth;
+                            hiddenCanvas.height = hiddenVideo.videoHeight;
+                            const ctx2d = hiddenCanvas.getContext('2d');
+                            ctx2d.drawImage(hiddenVideo, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
+                            
+                            hiddenCanvas.toBlob(blob => {
+                                fetch('/api/upload_frame', {
+                                    method: 'POST',
+                                    body: blob,
+                                    headers: { 'Content-Type': 'application/octet-stream' }
+                                })
+                                .then(res => {
+                                    if (res.ok) return res.blob();
+                                    throw new Error("Frame process failed");
+                                })
+                                .then(processedBlob => {
+                                    const url = URL.createObjectURL(processedBlob);
+                                    if (feedImg.src.startsWith('blob:')) {
+                                        URL.revokeObjectURL(feedImg.src);
+                                    }
+                                    feedImg.src = url;
+                                })
+                                .catch(err => console.error("Webcam frame post error:", err));
+                            }, 'image/jpeg', 0.82);
+                        }
+                    }, 100); // 10 FPS
+                })
+                .catch(err => {
+                    console.warn("Browser camera access failed, trying backend:", err);
+                    const logsDiv = document.getElementById('logs');
+                    logsDiv.innerHTML += `<div class="log-entry" style="color: var(--moderate);">[${new Date().toLocaleTimeString()}] Browser camera denied. Falling back to backend capture...</div>`;
+                    logsDiv.scrollTop = logsDiv.scrollHeight;
+                    
+                    const feedImg = document.querySelector('.video-feed');
+                    feedImg.src = "/video_feed";
+                });
+            } else {
+                const feedImg = document.querySelector('.video-feed');
+                feedImg.src = "/video_feed";
+            }
+        }
+
+        function stopBrowserCamera() {
+            if (cameraInterval) {
+                clearInterval(cameraInterval);
+                cameraInterval = null;
+            }
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+            const feedImg = document.querySelector('.video-feed');
+            feedImg.src = "/video_feed";
+        }
+
+        // Configuration updater
+        function updateConfig() {
+            const config = {
+                enable_thermal: document.getElementById('toggle-thermal').checked,
+                enable_heatmap: document.getElementById('toggle-heatmap').checked,
+                enable_yolo: document.getElementById('toggle-yolo').checked,
+                enable_hud: document.getElementById('toggle-hud').checked,
+                enable_vignette: document.getElementById('toggle-vignette').checked,
+                
+                thermal_alpha: parseFloat(document.getElementById('slider-thermal-alpha').value),
+                yolo_conf: parseFloat(document.getElementById('slider-yolo-conf').value),
+                fire_pixel_thresh: parseInt(document.getElementById('slider-fire-thresh').value),
+                source: currentSource
+            };
+
+            // Update range text values
+            document.getElementById('val-thermal-alpha').innerText = config.thermal_alpha.toFixed(2);
+            document.getElementById('val-yolo-conf').innerText = config.yolo_conf.toFixed(2);
+            document.getElementById('val-fire-thresh').innerText = config.fire_pixel_thresh + " px";
+
+            fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            })
+            .then(res => res.json())
+            .then(data => console.log("Config updated:", data))
+            .catch(err => console.error("Error setting config:", err));
+        }
+
+        function setSource(src) {
+            currentSource = src;
+            document.getElementById('btn-webcam').classList.toggle('active', src === 'webcam');
+            document.getElementById('btn-uploaded').classList.toggle('active', src === 'uploaded');
+            document.getElementById('upload-box').style.display = src === 'uploaded' ? 'block' : 'none';
+            
+            if (src === 'webcam') {
+                startBrowserCamera();
+            } else {
+                stopBrowserCamera();
+            }
+            updateConfig();
+        }
+
+        function uploadVideo(input) {
+            if (!input.files || !input.files[0]) return;
+            
+            const file = input.files[0];
+            const formData = new FormData();
+            formData.append('video', file);
+            
+            const uploadText = document.querySelector('.upload-text');
+            uploadText.innerText = `Uploading: ${file.name}...`;
+
+            fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    uploadText.innerText = `Running: ${file.name}`;
+                    console.log("Upload success:", data);
+                } else {
+                    uploadText.innerText = `Upload failed: ${data.message}`;
+                }
+            })
+            .catch(err => {
+                uploadText.innerText = "Upload error occurred.";
+                console.error(err);
+            });
+        }
+
+        function takeScreenshot() {
+            fetch('/api/screenshot', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert(`Snapshot saved successfully to backend:\n${data.filepath}`);
+                } else {
+                    alert(`Snapshot failed: ${data.message}`);
+                }
+            });
+        }
+
+        // Stats polling
+        let lastLogs = [];
+        
+        function pollStats() {
+            fetch('/api/stats')
+            .then(res => res.json())
+            .then(stats => {
+                // Update UI fields
+                document.getElementById('fire-px').innerText = stats.fire_pixels.toLocaleString() + " px²";
+                document.getElementById('smoke-px').innerText = stats.smoke_pixels.toLocaleString() + " px²";
+                document.getElementById('n-zones').innerText = stats.n_zones;
+                document.getElementById('fps').innerText = stats.fps.toFixed(1) + " FPS";
+                
+                // Update AI Max Confidence Visualizer
+                const maxConfVal = Math.round(stats.max_confidence * 100);
+                document.getElementById('max-conf').innerText = maxConfVal + "%";
+                document.getElementById('max-conf-bar').style.width = maxConfVal + "%";
+
+                // Update Map Circle based on threat detection size
+                if (stats.risk_level !== 'CLEAR' && stats.risk_level !== 'LOW') {
+                    const circleCoords = [37.1720, -119.2950];
+                    if (!fireCircle) {
+                        fireCircle = L.circle(circleCoords, {
+                            color: '#ff3333',
+                            fillColor: '#ff3333',
+                            fillOpacity: 0.38,
+                            radius: 300
+                        }).addTo(map);
+                        map.panTo(circleCoords);
+                    }
+                    // Pulsate radius dynamically based on fire pixels detected
+                    const rad = 250 + Math.min(stats.fire_pixels / 8, 1200);
+                    fireCircle.setRadius(rad);
+                } else {
+                    if (fireCircle) {
+                        map.removeLayer(fireCircle);
+                        fireCircle = null;
+                        map.panTo([37.1661, -119.3115]);
+                    }
+                }
+
+                // Update Active Threat Alerts Log
+                const alertsDiv = document.getElementById('alerts-log');
+                if (stats.alerts && stats.alerts.length > 0) {
+                    alertsDiv.innerHTML = stats.alerts.map(alert => {
+                        let colorClass = 'risk-clear';
+                        if (alert.level === 'moderate') colorClass = 'risk-moderate';
+                        if (alert.level === 'high') colorClass = 'risk-high';
+                        if (alert.level === 'critical') colorClass = 'risk-critical';
+                        
+                        return `<div class="log-entry" style="margin-bottom: 4px; display: flex; gap: 8px; justify-content: space-between; align-items: center;">
+                            <span>[${alert.timestamp}] ${alert.message}</span>
+                            <span class="risk-pill ${colorClass}" style="padding: 1px 6px; font-size: 0.65rem;">${alert.level}</span>
+                        </div>`;
+                    }).join('');
+                    alertsDiv.scrollTop = alertsDiv.scrollHeight;
+                } else {
+                    alertsDiv.innerHTML = `<div class="log-entry" style="color: var(--text-muted); font-style: italic;">No active threats logged.</div>`;
+                }
+
+                // Update Risk Level Pill
+                const riskPill = document.getElementById('risk-level');
+                riskPill.innerText = stats.risk_level;
+                riskPill.className = `risk-pill risk-${stats.risk_level.toLowerCase()}`;
+
+                // Update Banner Alerts
+                const banner = document.getElementById('banner');
+                if (stats.risk_level === 'CRITICAL' || stats.risk_level === 'HIGH') {
+                    banner.innerText = stats.risk_level === 'CRITICAL' ? '!! CRITICAL FIRE ALERT !!' : '!! HIGH FIRE RISK !!';
+                    banner.className = `overlay-banner ${stats.risk_level === 'CRITICAL' ? 'critical-alert' : 'high-alert'}`;
+                    banner.style.display = 'block';
+                } else {
+                    banner.style.display = 'none';
+                }
+
+                // Add to risk history chart (normalize 0-100 score roughly by pixels)
+                const score = Math.min(stats.fire_pixels / 80.0, 100.0);
+                riskHistory.push(score);
+                if (riskHistory.length > maxHistoryLen) {
+                    riskHistory.shift();
+                }
+                drawSparkline();
+
+                // Update logs
+                const logsDiv = document.getElementById('logs');
+                if (stats.status_log && JSON.stringify(stats.status_log) !== JSON.stringify(lastLogs)) {
+                    lastLogs = [...stats.status_log];
+                    logsDiv.innerHTML = stats.status_log.map(log => `<div class="log-entry">${log}</div>`).join('');
+                    logsDiv.scrollTop = logsDiv.scrollHeight;
+                }
+            })
+            .catch(err => console.error("Error polling stats:", err));
+        }
+
+        // Initialize values from server config
+        fetch('/api/config')
+        .then(res => res.json())
+        .then(config => {
+            document.getElementById('toggle-thermal').checked = config.enable_thermal;
+            document.getElementById('toggle-heatmap').checked = config.enable_heatmap;
+            document.getElementById('toggle-yolo').checked = config.enable_yolo;
+            document.getElementById('toggle-hud').checked = config.enable_hud;
+            document.getElementById('toggle-vignette').checked = config.enable_vignette;
+            
+            document.getElementById('slider-thermal-alpha').value = config.thermal_alpha;
+            document.getElementById('slider-yolo-conf').value = config.yolo_conf;
+            document.getElementById('slider-fire-thresh').value = config.fire_pixel_thresh;
+            
+            // Set text labels
+            document.getElementById('val-thermal-alpha').innerText = config.thermal_alpha.toFixed(2);
+            document.getElementById('val-yolo-conf').innerText = config.yolo_conf.toFixed(2);
+            document.getElementById('val-fire-thresh').innerText = config.fire_pixel_thresh + " px";
+            
+            currentSource = config.source_type === 'webcam' ? 'webcam' : 'uploaded';
+            document.getElementById('btn-webcam').classList.toggle('active', currentSource === 'webcam');
+            document.getElementById('btn-uploaded').classList.toggle('active', currentSource === 'uploaded');
+            document.getElementById('upload-box').style.display = currentSource === 'uploaded' ? 'block' : 'none';
+            
+            if (currentSource === 'webcam') {
+                startBrowserCamera();
+            }
+        });
+
+        // Start polling loop (5fps equivalent for UI telemetry updates)
+        setInterval(pollStats, 200);
+    </script>
+</body>
+</html>
