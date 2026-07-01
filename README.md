@@ -4,6 +4,26 @@ An AI-powered computer vision system designed for real-time monitoring and early
 
 ---
 
+## 🛠️ Technologies Used
+
+- **Backend (Python)**:
+  - **Flask**: Lightweight web framework serving HTTP routes, frame uploads, and config APIs.
+  - **OpenCV (cv2)**: Multi-spectral color range filtering (HSV), frame scaling, thermal mapping, contour mapping, and graphics overlays.
+  - **Ultralytics YOLOv8**: Contextual object detection (people, vehicles) to assess fire zone proximity hazards.
+  - **SciPy**: Gaussian filters for thermal gradient smoothing.
+  - **PyTorch**: Core machine learning library driving YOLO.
+- **Frontend (Web Dashboard)**:
+  - **HTML5 & Vanilla CSS**: Premium dark-mode theme utilizing glassmorphism, responsive grids, and subtle micro-animations.
+  - **Vanilla JavaScript**: AJAX configuration updates, UI data binding, and telemetry polling.
+  - **Leaflet.js**: Geospatial mapping API tracking camera coordinates and pulsing alert zones.
+  - **HTML5 Canvas**: Custom real-time sparkline plotting risk score trends.
+  - **Browser MediaDevices API**: High-speed browser webcam frame capture and streaming.
+- **Deployment & Dev Ops**:
+  - **Docker**: Container configuration to streamline local/cloud deployments.
+  - **Git**: Local version control.
+
+---
+
 ## 🌟 Core Features
 
 - **Real-Time Video Stream**: Processed camera frames displaying detected fire zones, spread trajectories, and smoke contours.
