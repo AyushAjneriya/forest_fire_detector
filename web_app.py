@@ -825,7 +825,7 @@ def secure_filename_local(filename):
     return re.sub(r'[^a-zA-Z0-9_.-]', '_', filename)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 10000))
     print("\n" + "=" * 66)
     print("  Starting Forest Fire Early Detection Web Interface...")
     print(f"  Access dashboard at: http://0.0.0.0:{port}")
