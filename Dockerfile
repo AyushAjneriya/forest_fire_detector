@@ -35,7 +35,7 @@ COPY . .
 RUN mkdir -p screenshots uploads
 
 # Expose the application port
-EXPOSE 5000
+EXPOSE 10000
 
 # Start the Flask web app
-CMD ["python", "web_app.py"]
+CMD ["gunicorn", "--bind", "0.0.0.0:10000", "web_app:app"]
